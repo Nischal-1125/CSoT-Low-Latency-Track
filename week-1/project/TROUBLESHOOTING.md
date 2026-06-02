@@ -102,7 +102,15 @@ Exit code **132** means the sandboxed runner hit **signal 4 (`SIGILL`)** — an 
 
 The usual cause: **`-march=native`**. The shipped `CMakeLists.txt` enables it for Release builds so local benchmarks can use AVX2/AVX-512 on your laptop. The judge runs on a fixed EC2 instance (`c5.2xlarge`, Amazon Linux 2023) — not your CPU.
 
-**Fix:** rebuild `spec_strategy.so` with a portable baseline before uploading:
+### `runner exit 132` on every upload (including the shipped sample)
+
+Two different things can produce the same dashboard error. Check which one you have:
+
+1. **Judge-side (organizer fix):** the sandboxed **runner binary** was built with `-march=native` on a CPU that has AVX-512, then the judge VM moved to an instance without it (common on AWS). The runner SIGILLs before your `.so` runs — *every* upload fails, even [`samples/spec_strategy.so`](./samples/spec_strategy.so). Rebuild the judge with `-march=x86-64-v2` (see [`judge/CMakeLists.txt`](../../../judge/CMakeLists.txt)) and restart `csot-judge`.
+
+2. **Student-side (your fix):** your **`spec_strategy.so`** was built with `-march=native` on a newer laptop than the judge EC2 box. Only *your* uploads fail; the shipped sample and other participants' portable builds work. Rebuild with a portable baseline (below).
+
+**Student fix:** rebuild `spec_strategy.so` with a portable baseline before uploading:
 
 ```bash
 # One-off Release build without -march=native (override the shipped default):

@@ -89,6 +89,10 @@ SYM0, SYM1, SYM2, SYM3
 
 The judge may use more symbols in held-out data. Your implementation must support at least `64` distinct symbols.
 
+You do **not** need the engine to tell you how many symbols exist before replay. Treat `64` as a compile-time maximum (`std::array<SymbolState, 64>`). On the first tick for a new `t.symbol`, assign the next free slot (compare `string_view`s against a small fixed table of known names — at most 64 entries). That work is O(number of known symbols) per tick and uses no heap once slots are warm. Heap in `on_init()` is allowed by the ABI; heap inside `on_tick()` is what you are trying to eliminate.
+
+Your CSV loader (or the judge) must **intern** symbol strings so each distinct name keeps one stable address for the whole replay. Without that, `string_view` equality and slot assignment are undefined.
+
 ### Position updates
 
 `position` is updated only when `on_fill(...)` is called:

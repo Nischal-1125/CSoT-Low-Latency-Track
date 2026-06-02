@@ -455,7 +455,7 @@ Your laptop will produce *different* (often faster on single-core) numbers — t
 - **Cooldown + daily quota** are enforced server-side. The dashboard shows the current window; trying to spam-upload returns `429`.
 - **One identity, one entry.** No teams.
 - **Max upload size:** 5 MiB. `.so` only, must export `extern "C" csot::Strategy* create_strategy()`.
-- **Build for the judge CPU, not yours.** Release defaults in the shipped `CMakeLists.txt` use `-march=native` — great for local benchmarks, but if your laptop has newer instructions (AVX-512, etc.) than the judge EC2 box, the upload fails with **`rejected` / `runner exit 132`** (`SIGILL`, illegal instruction). Rebuild with a portable flag such as `-march=x86-64-v2` before uploading. Details: [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) → *Portal upload shows `rejected` with `runner exit 132`*.
+- **Build for the judge CPU, not yours.** Release defaults in the shipped `CMakeLists.txt` use `-march=native` — great for local benchmarks, but if your laptop has newer instructions than the judge EC2 box, the upload fails with **`rejected` / `runner exit 132`**. Rebuild with `-march=x86-64-v2` before uploading. If *every* upload fails (even the shipped [`samples/spec_strategy.so`](./samples/spec_strategy.so)), the judge runner itself needs a rebuild — see [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md).
 - **The judge VM may be stopped** between cohort sessions to save cost — when it is, the dashboard shows a grey "judge offline" pill. Submissions still queue, and drain as soon as the judge is back up. (`Restart=always` means a fresh `aws ec2 start-instances` brings everything back without intervention.)
 
 ### What you do NOT have to do this week
