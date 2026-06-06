@@ -38,8 +38,10 @@ add_compile_options(
 )
 
 # -------- Tuning (Release only) --------
-add_compile_options($<$<CONFIG:Release>:-O2>)
-add_compile_options($<$<CONFIG:Release>:-march=native>)
+add_compile_options($<$<CONFIG:Release>:-O3>)
+add_compile_options($<$<CONFIG:Release>:-DNDEBUG>)
+add_compile_options($<$<CONFIG:Release>:-fno-plt>)
+# add_compile_options($<$<CONFIG:Release>:-march=native>)
 add_compile_options($<$<CONFIG:Release>:-fno-omit-frame-pointer>)   # better perf/flame-graph stacks
 
 # -------- Optional: sanitizers --------
@@ -80,6 +82,31 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 # Uncomment when you've written strategies/spec_strategy.cpp.
 # add_library(spec_strategy SHARED strategies/spec_strategy.cpp)
 # set_target_properties(spec_strategy PROPERTIES PREFIX "")   # produce "spec_strategy.so" not "libspec_strategy.so"
+
+add_library(engine STATIC
+    src/replay_engine.cpp
+)
+
+add_executable(quant_runner
+    src/main.cpp
+    src/csv_loader.cpp
+)
+
+target_link_libraries(
+    quant_runner
+    PRIVATE
+    engine
+    reference_strategy
+)
+
+add_library(reference_strategy SHARED
+    strategies/reference_strategy.cpp
+)
+
+set_target_properties(
+    reference_strategy
+    PROPERTIES PREFIX ""
+)
 
 # -------- Benchmarks (Google Benchmark) --------
 # Uncomment when you've written bench/bench.cpp.

@@ -1,0 +1,449 @@
+#include "reference_strategy.hpp"
+
+#include <cmath>
+#include <stdexcept>
+
+
+namespace csot {
+
+void ReferenceStrategy::on_init() {
+    // order_buffer_.reserve(1);
+}
+
+// size_t ReferenceStrategy::get_symbol_index(std::string_view symbol)
+// {
+//     // // Check existing symbols first
+//     // for (size_t i = 0; i < symbols_.size(); ++i)
+//     // {
+//     //     if (symbols_[i].used &&
+//     //         symbols_[i].symbol == symbol)
+//     //     {
+//     //         return i;
+//     //     }
+//     // }
+
+
+//     const char* ptr = symbol.data();
+
+//     // Check existing symbols first
+//     for (size_t i = 0; i < symbols_.size(); ++i)
+//     {
+//         if (symbols_[i].used &&
+//             symbols_[i].symbol_ptr == ptr)
+//         {
+//             return i;
+//         }
+//     }
+
+//     // Assign a fresh slot
+//     for (size_t i = 0; i < symbols_.size(); ++i)
+//     {
+//         if (!symbols_[i].used)
+//         {
+//             symbols_[i].used = true;
+//             symbols_[i].symbol = symbol;
+//             symbols_[i].symbol_ptr = symbol.data();
+
+//             return i;
+//         }
+//     }
+
+//     throw std::runtime_error("Maximum symbol count exceeded");
+// }
+
+// size_t ReferenceStrategy::get_symbol_index(std::string_view symbol)
+// {
+//     return static_cast<size_t>(symbol[3] - '0');
+// }
+
+
+// size_t ReferenceStrategy::get_symbol_index(std::string_view symbol)
+// {
+//     const char c = symbol[3];
+
+//     switch (c)
+//     {
+//         case '0': return 0;
+//         case '1': return 1;
+//         case '2': return 2;
+//         case '3': return 3;
+//         default:
+//             throw std::runtime_error("Unknown symbol");
+//     }
+// }
+
+
+std::vector<Order> ReferenceStrategy::on_tick(const Tick& t) {
+
+    size_t idx = get_symbol_index(t.symbol);
+
+    auto& st = states_[idx];
+
+    const double mid = (t.bid_px + t.ask_px) * 0.5;
+
+    const double old_mid =
+        st.mids[st.head];
+
+    st.mids[st.head] = mid;
+
+    st.rolling_sum += mid - old_mid;
+
+    st.rolling_sq_sum +=
+        mid * mid
+        - old_mid * old_mid;
+
+    st.head = (st.head + 1) & 63;
+
+    if (st.count < 64)
+    {
+        ++st.count;
+    }
+
+    if (st.count < 64)
+    {
+        return {};
+    }
+
+    const double mean =
+        st.rolling_sum / 64.0;
+
+    const double variance =
+        (st.rolling_sq_sum / 64.0)
+        - (mean * mean);
+
+    if (variance <= 1e-18)
+    {
+        return {};
+    }
+
+    const double diff =
+        mid - mean;
+
+    const double diff_sq =
+        diff * diff;
+
+    if (st.position == 0)
+    {
+        if (diff > 0.0 &&
+            diff_sq >= 4.0 * variance)
+        {
+            return {
+                Order{
+                    Order::Side::SELL,
+                    t.symbol,
+                    t.bid_px,
+                    1
+                }
+            };
+            // order_buffer_.push_back(
+            //     Order{
+            //         Order::Side::SELL,
+            //         t.symbol,
+            //         t.bid_px,
+            //         1
+            //     }
+            // );
+
+            // return order_buffer_;
+        }
+
+        if (diff < 0.0 &&
+            diff_sq >= 4.0 * variance)
+        {
+            return {
+                Order{
+                    Order::Side::BUY,
+                    t.symbol,
+                    t.ask_px,
+                    1
+                }
+            };
+            // order_buffer_.push_back(
+            //     Order{
+            //         Order::Side::BUY,
+            //         t.symbol,
+            //         t.ask_px,
+            //         1
+            //     }
+            // );
+
+            // return order_buffer_;
+        }
+
+        return {};
+    }
+
+    if (st.position > 0 &&
+        diff_sq <= 0.25 * variance)
+    {
+        return {
+            Order{
+                Order::Side::SELL,
+                t.symbol,
+                t.bid_px,
+                static_cast<uint32_t>(st.position)
+            }
+        };
+        // order_buffer_.push_back(
+        //      Order{
+        //          Order::Side::SELL,
+        //          t.symbol,
+        //          t.bid_px,
+        //          static_cast<uint32_t>(st.position)
+        //      }
+        //  );
+
+        //  return order_buffer_;
+    }
+
+    if (st.position < 0 &&
+        diff_sq <= 0.25 * variance)
+    {
+        return {
+            Order{
+                Order::Side::BUY,
+                t.symbol,
+                t.ask_px,
+                static_cast<uint32_t>(-st.position)
+            }
+        };
+        // order_buffer_.push_back(
+        //     Order{
+        //         Order::Side::BUY,
+        //         t.symbol,
+        //         t.ask_px,
+        //         static_cast<uint32_t>(-st.position)
+        //     }
+        //  );
+        //  return order_buffer_;
+    }
+
+    return {};
+}
+
+// std::vector<Order> ReferenceStrategy::on_tick(const Tick& t)
+// {
+//     size_t idx = get_symbol_index(t.symbol);
+
+//     auto& st = states_[idx];
+
+//     const double mid = (t.bid_px + t.ask_px) * 0.5;
+
+//     // st.mids[st.head] = mid;
+//     // st.head = (st.head + 1) & 63;
+//     const double old_mid =
+//     st.mids[st.head];
+
+//     st.mids[st.head] = mid;
+
+//     st.rolling_sum += mid - old_mid;
+
+//     st.rolling_sq_sum +=
+//         mid * mid
+//         - old_mid * old_mid;
+
+//     st.head = (st.head + 1) & 63;
+
+//     if (st.count < 64)
+//     {
+//         ++st.count;
+//     }
+
+//     if (st.count < 64)
+//     {
+//         return {};
+//     }
+
+//     // double sum = 0.0;
+
+//     // for (double x : st.mids)
+//     // {
+//     //     sum += x;
+//     // }
+//     // const double mean = sum / 64.0;
+//     const double mean = st.rolling_sum / 64.0;
+
+
+//     // double sq = 0.0;
+
+//     // for (double x : st.mids)
+//     // {
+//     //     const double d = x - mean;
+//     //     sq += d * d;
+//     // }
+//     // const double variance = sq / 64.0;
+
+//     //******************************************************************************* */
+//     // const double variance = (st.rolling_sq_sum / 64.0) - (mean * mean);
+//     // const double stddev =
+//     // std::sqrt(
+//     //     std::max(0.0, variance)
+//     // );
+//     // // const double stddev = std::sqrt(variance);
+
+//     // if (stddev < 1e-9)
+//     // {
+//     //     return {};
+//     // }
+    
+
+//     //****************************************************************************** */
+
+//     const double variance =
+//         (st.rolling_sq_sum / 64.0) - (mean * mean);
+
+//     if (variance <= 1e-18)
+//     {
+//         return {};
+//     }
+
+//     const double stddev = std::sqrt(variance);
+
+
+
+//     // const double z = (mid - mean) / stddev;
+//     // const double abs_z = std::abs(z);
+
+//     // if (st.position == 0) {
+//     //     if (z >= 2.0) {
+//     //         return {
+//     //             Order{
+//     //                 Order::Side::SELL,
+//     //                 t.symbol,
+//     //                 t.bid_px,
+//     //                 1
+//     //             }
+//     //         };
+//     //     }
+
+//     //     if (z <= -2.0) {
+//     //         return {
+//     //             Order{
+//     //                 Order::Side::BUY,
+//     //                 t.symbol,
+//     //                 t.ask_px,
+//     //                 1
+//     //             }
+//     //         };
+//     //     }
+
+//     //     return {};
+//     // }
+
+//     // if (st.position > 0 && abs_z <= 0.5)
+//     // {
+//     //     return {
+//     //         Order{
+//     //             Order::Side::SELL,
+//     //             t.symbol,
+//     //             t.bid_px,
+//     //             static_cast<uint32_t>(st.position)
+//     //         }
+//     //     };
+//     // }
+
+//     // if (st.position < 0 && abs_z <= 0.5)
+//     // {
+//     //     return {
+//     //         Order{
+//     //             Order::Side::BUY,
+//     //             t.symbol,
+//     //             t.ask_px,
+//     //             static_cast<uint32_t>(-st.position)
+//     //         }
+//     //     };
+//     // }
+
+//     const double diff = mid - mean;
+
+//     const double entry_threshold = 2.0 * stddev;
+//     const double exit_threshold  = 0.5 * stddev;
+//     const double abs_diff = std::abs(diff);
+
+//     if (st.position == 0)
+//     {
+//         // if (diff >= 2.0 * stddev)
+//         if (diff >= entry_threshold)
+//         {
+//             return {
+//                 Order{
+//                     Order::Side::SELL,
+//                     t.symbol,
+//                     t.bid_px,
+//                     1
+//                 }
+//             };
+//         }
+
+//         // if (diff <= -2.0 * stddev)
+//         if (diff <= -entry_threshold)
+//         {
+//             return {
+//                 Order{
+//                     Order::Side::BUY,
+//                     t.symbol,
+//                     t.ask_px,
+//                     1
+//                 }
+//             };
+//         }
+
+//         return {};
+//     }
+
+//     if (st.position > 0 &&
+//         abs_diff <= exit_threshold)
+//     {
+//         return {
+//             Order{
+//                 Order::Side::SELL,
+//                 t.symbol,
+//                 t.bid_px,
+//                 static_cast<uint32_t>(st.position)
+//             }
+//         };
+//     }
+
+//     if (st.position < 0 &&
+//         abs_diff <= exit_threshold)
+//     {
+//         return {
+//             Order{
+//                 Order::Side::BUY,
+//                 t.symbol,
+//                 t.ask_px,
+//                 static_cast<uint32_t>(-st.position)
+//             }
+//         };
+//     }
+
+
+
+//     return {};
+// }
+
+void ReferenceStrategy::on_fill(
+    const Order& o,
+    double fill_price,
+    uint32_t fill_qty)
+{
+    (void)fill_price;
+
+    size_t idx = get_symbol_index(o.symbol);
+
+    if (o.side == Order::Side::BUY)
+    {
+        states_[idx].position += fill_qty;
+    }
+    else
+    {
+        states_[idx].position -= fill_qty;
+    }
+}
+
+} // namespace csot
+
+extern "C" csot::Strategy* create_strategy()
+{
+    return new csot::ReferenceStrategy();
+}
