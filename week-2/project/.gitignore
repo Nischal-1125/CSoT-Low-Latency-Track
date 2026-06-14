@@ -1,0 +1,17 @@
+# Build artifacts
+
+build/
+*.trace
+massif.out.*
+perf.data*
+perf.data.old
+
+build-*/
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+
+
+
