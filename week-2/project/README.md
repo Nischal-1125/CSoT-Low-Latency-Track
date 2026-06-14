@@ -1,3 +1,170 @@
+
+
+# Results
+
+## Final Leaderboard Performance
+
+| Metric     | Value             |
+| ---------- | ----------------- |
+| Throughput | **101.86 M acc/s** |
+| Runtime    | **981,771,489 ns** |
+| Score      | **158.3**          |
+| Final Rank | **#5**             |
+
+---
+
+## Optimization Journey
+
+The project started with a straightforward implementation using:
+
+* Array-based LRU tracking
+* Scalar tag comparisons
+* Conventional cache bookkeeping
+
+This version achieved roughly **40–50 M acc/s**.
+
+### Iteration 1: Cache-Friendly Data Layout
+
+Reorganized cache metadata into fixed-size contiguous arrays.
+
+Changes:
+
+* Removed dynamic allocations from the hot path
+* Aligned cache sets to cache-line boundaries
+* Reduced pointer chasing
+
+Result:
+
+* Improved locality
+* Reduced memory stalls
+
+---
+
+### Iteration 2: Branch Reduction
+
+Several frequently executed branches were replaced with branchless bit operations.
+
+Examples:
+
+* Dirty-bit updates
+* Access counting
+* Dirty writeback accounting
+
+Result:
+
+* Fewer branch mispredictions
+* More predictable execution
+
+---
+
+### Iteration 3: SIMD Tag Lookup
+
+Implemented AVX2-based tag comparison.
+
+Instead of comparing 8 tags one-by-one:
+
+```cpp
+for (int i = 0; i < 8; ++i)
+    if (tags[i] == wanted)
+        ...
+```
+
+all 8 ways are checked simultaneously using AVX2 vector instructions.
+
+Result:
+
+* Faster tag matching on cache probes
+* Better utilization of CPU vector units
+
+---
+
+### Iteration 4: Matrix-Based LRU
+
+The largest performance improvement came from replacing the traditional LRU implementation.
+
+Traditional LRU:
+
+```text
+[MRU ... LRU]
+```
+
+required:
+
+* Linear scans
+* Element shifting
+* Multiple memory writes
+
+The final implementation stores LRU state as a 64-bit recency matrix.
+
+Benefits:
+
+* O(1) touch operation
+* O(1) victim selection
+* Entire LRU state fits in a single register
+
+This optimization alone produced the largest throughput increase.
+
+---
+
+## Key Lessons
+
+This project reinforced several important low-latency engineering principles:
+
+1. Data layout is often more important than algorithms.
+2. Cache misses dominate execution time.
+3. Removing allocations is essential in hot paths.
+4. SIMD only becomes effective after memory access patterns are optimized.
+5. Branch prediction and cache locality matter more than individual instruction costs.
+
+---
+
+## Cache Architecture Implemented
+
+### L1 Cache
+
+* 64 sets
+* 8-way associative
+* 64-byte cache lines
+* Write-back
+* Write-allocate
+* True LRU replacement
+
+### L2 Cache
+
+* 512 sets
+* 8-way associative
+* 64-byte cache lines
+* Write-back
+* Write-allocate
+* True LRU replacement
+
+The simulator correctly handles:
+
+* L1 hits/misses
+* L2 hits/misses
+* Dirty evictions
+* L1 → L2 writebacks
+* L2 → memory writebacks
+* Write-allocate fills
+* Demand accesses vs internal cache traffic
+
+---
+
+## Final Thoughts
+
+The most surprising outcome was that the biggest gains did not come from SIMD instructions or compiler tricks. The largest improvement came from redesigning the data structures themselves, particularly the replacement-policy implementation.
+
+This project provided hands-on experience with cache behavior, memory hierarchy, locality, branch prediction, SIMD programming, and performance-oriented systems design.
+
+
+
+
+
+
+
+
+
+
 # Week 2 Project — Fastest Correct Cache Simulator
 
 > **Mission:** Implement a **single `cache_sim.cpp`** that simulates a fixed two-level cache hierarchy over a huge memory trace, emits the exact reference counters, and does it **as fast as wall-clock allows**. Week 1 taught you to measure a hot loop; Week 2 is where you make one disappear into the cache. Same "fastest correct implementation" game, brand-new kernel — one with far more room to optimize: struct-of-arrays state, branchless set lookup, compile-time geometry, prefetch, SIMD tag compares.
@@ -343,159 +510,3 @@ Sign in at **[csot-low-latency.devclub.in](https://csot-low-latency.devclub.in/)
 
 You built a cache from first principles and then made it scream. **Understanding the memory hierarchy by simulating it is the fastest way to never fear it again** — and every optimization you just made (SoA, zero-alloc, compile-time folding) is exactly what Week 3 needs when we add threads.
 
-
-# Results
-
-## Final Leaderboard Performance
-
-| Metric     | Value             |
-| ---------- | ----------------- |
-| Throughput | **101.86 M acc/s** |
-| Runtime    | **981,771,489 ns** |
-| Score      | **158.3**          |
-| Final Rank | **#5**             |
-
----
-
-## Optimization Journey
-
-The project started with a straightforward implementation using:
-
-* Array-based LRU tracking
-* Scalar tag comparisons
-* Conventional cache bookkeeping
-
-This version achieved roughly **40–50 M acc/s**.
-
-### Iteration 1: Cache-Friendly Data Layout
-
-Reorganized cache metadata into fixed-size contiguous arrays.
-
-Changes:
-
-* Removed dynamic allocations from the hot path
-* Aligned cache sets to cache-line boundaries
-* Reduced pointer chasing
-
-Result:
-
-* Improved locality
-* Reduced memory stalls
-
----
-
-### Iteration 2: Branch Reduction
-
-Several frequently executed branches were replaced with branchless bit operations.
-
-Examples:
-
-* Dirty-bit updates
-* Access counting
-* Dirty writeback accounting
-
-Result:
-
-* Fewer branch mispredictions
-* More predictable execution
-
----
-
-### Iteration 3: SIMD Tag Lookup
-
-Implemented AVX2-based tag comparison.
-
-Instead of comparing 8 tags one-by-one:
-
-```cpp
-for (int i = 0; i < 8; ++i)
-    if (tags[i] == wanted)
-        ...
-```
-
-all 8 ways are checked simultaneously using AVX2 vector instructions.
-
-Result:
-
-* Faster tag matching on cache probes
-* Better utilization of CPU vector units
-
----
-
-### Iteration 4: Matrix-Based LRU
-
-The largest performance improvement came from replacing the traditional LRU implementation.
-
-Traditional LRU:
-
-```text
-[MRU ... LRU]
-```
-
-required:
-
-* Linear scans
-* Element shifting
-* Multiple memory writes
-
-The final implementation stores LRU state as a 64-bit recency matrix.
-
-Benefits:
-
-* O(1) touch operation
-* O(1) victim selection
-* Entire LRU state fits in a single register
-
-This optimization alone produced the largest throughput increase.
-
----
-
-## Key Lessons
-
-This project reinforced several important low-latency engineering principles:
-
-1. Data layout is often more important than algorithms.
-2. Cache misses dominate execution time.
-3. Removing allocations is essential in hot paths.
-4. SIMD only becomes effective after memory access patterns are optimized.
-5. Branch prediction and cache locality matter more than individual instruction costs.
-
----
-
-## Cache Architecture Implemented
-
-### L1 Cache
-
-* 64 sets
-* 8-way associative
-* 64-byte cache lines
-* Write-back
-* Write-allocate
-* True LRU replacement
-
-### L2 Cache
-
-* 512 sets
-* 8-way associative
-* 64-byte cache lines
-* Write-back
-* Write-allocate
-* True LRU replacement
-
-The simulator correctly handles:
-
-* L1 hits/misses
-* L2 hits/misses
-* Dirty evictions
-* L1 → L2 writebacks
-* L2 → memory writebacks
-* Write-allocate fills
-* Demand accesses vs internal cache traffic
-
----
-
-## Final Thoughts
-
-The most surprising outcome was that the biggest gains did not come from SIMD instructions or compiler tricks. The largest improvement came from redesigning the data structures themselves, particularly the replacement-policy implementation.
-
-This project provided hands-on experience with cache behavior, memory hierarchy, locality, branch prediction, SIMD programming, and performance-oriented systems design.
