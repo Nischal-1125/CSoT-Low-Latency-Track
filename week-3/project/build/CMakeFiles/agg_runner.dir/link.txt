@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects CMakeFiles/agg_runner.dir/harness/main.cpp.o CMakeFiles/agg_runner.dir/aggregator.cpp.o -o agg_runner 
