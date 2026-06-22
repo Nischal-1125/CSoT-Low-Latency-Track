@@ -1,0 +1,4 @@
+build/
+*.ticks
+perf.data*
+massif.out.*

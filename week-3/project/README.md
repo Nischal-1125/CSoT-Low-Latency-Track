@@ -1,6 +1,7 @@
 # Week 3 Project — Fastest Correct Parallel Tick Aggregator
 
 
+## My Results
 
 ## Results
 
@@ -31,17 +32,37 @@ struct alignas(64) PartialTable {
     csot::SymbolAgg agg[1024];
 };
 
+### Final Implementation
+
+My final solution uses:
+
+* 4-way parallel aggregation using `std::jthread`
+* One private aggregation table per thread (`alignas(64)`)
+* Thread pinning via `sched_setaffinity`
+* Contiguous workload partitioning
+* Zero synchronization in the hot aggregation loop
+* Serial reduction of thread-local partial tables
+* Software prefetching in the processing loop
+
+The aggregation phase performs all updates on thread-local data structures, completely avoiding contention and false sharing during the hot path.
+
+### Performance
+
+| Metric      | Result               |
+| ----------- | -------------------- |
+| Throughput  | **678.49 M ticks/s** |
+| Score       | **160.0**            |
+| Correctness | ✅ Passed             |
+| Determinism | ✅ Passed             |
+
 ### Prefetch Distance Tuning
 
-One of the most impactful optimizations in this project came from tuning the software prefetch distance.
+One of the most impactful optimizations came from tuning the software prefetch distance.
 
 The hot loop processes a contiguous stream of `AggTick` records and issues a prefetch for future iterations:
 
 ```cpp
-for (const csot::AggTick* p = begin; p != end; ++p) {
-    __builtin_prefetch(p + D);
-    ...
-}
+__builtin_prefetch(p + D);
 ```
 
 where `D` is the prefetch distance.
@@ -62,13 +83,32 @@ Final implementation:
 __builtin_prefetch(p + 128);
 ```
 
-#### Observation
+### Observation
 
-Prefetching too close to the current iteration does not provide enough time for the data to arrive from memory before it is needed. Conversely, prefetching too far ahead can pollute the cache by bringing data in prematurely and evicting useful cache lines.
+Prefetching too close to the current iteration does not provide enough time for the data to arrive from memory before it is needed. Conversely, prefetching too far ahead can pollute the cache by bringing data into cache prematurely and evicting useful cache lines.
 
 On the benchmark hardware, a distance of **128 ticks ahead** produced the highest throughput, improving performance from approximately **591 M ticks/s** to **678 M ticks/s** — a gain of roughly **14%** from a single-parameter tuning change.
 
-This experiment demonstrates that memory latency often dominates modern multicore workloads, and that careful tuning of cache behavior can yield larger gains than many code-level micro-optimizations.
+This experiment demonstrates that memory latency often dominates modern multicore workloads and that careful tuning of cache behavior can yield larger gains than many code-level micro-optimizations.
+
+### Lessons Learned
+
+* Parallelism alone is not enough; memory hierarchy behavior heavily influences performance.
+* False sharing can significantly reduce throughput even when threads never logically interact.
+* Pinning worker threads to dedicated cores improves cache locality and reduces scheduler interference.
+* Software prefetching can substantially improve throughput when tuned correctly.
+* Measuring performance is essential: a one-line change to prefetch distance produced a larger gain than several structural code changes.
+* Throughput optimization often requires understanding the hardware (cache hierarchy, memory latency, scheduling, and cache locality) in addition to algorithmic complexity.
+
+
+
+
+
+
+
+
+
+
 
 
 
